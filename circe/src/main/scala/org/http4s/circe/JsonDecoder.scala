@@ -20,10 +20,10 @@ import cats.effect.Concurrent
 import io.circe._
 import org.http4s._
 
-/** F-algebra for separating the Sync required for extracting
-  * the Json from the body. As such if F is Sync at some layer,
+/** F-algebra for separating the Concurrent required for extracting
+  * the Json from the body. As such if F is Concurrent at some layer,
   * then this can be used to extract without the lower layer
-  * needing to be aware of the strong constraint.
+  * needing to be aware of the Concurrent constraint.
   */
 trait JsonDecoder[F[_]] {
   def asJson(m: Message[F]): F[Json]
