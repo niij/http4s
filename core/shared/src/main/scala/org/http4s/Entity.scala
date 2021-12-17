@@ -20,6 +20,7 @@ import cats.Monoid
 import cats.syntax.all._
 import cats.~>
 import fs2.Pure
+import fs2.Stream
 
 sealed trait Entity[+F[_]] {
   def body: EntityBody[F]
@@ -29,6 +30,7 @@ sealed trait Entity[+F[_]] {
 
   def translate[F1[x] >: F[x], G[_]](fk: F1 ~> G): Entity[G]
 }
+
 object Entity {
   def apply[F[_]](body: EntityBody[F], length: Option[Long] = None): Entity[F] = Raw(body, length)
 
@@ -39,12 +41,13 @@ object Entity {
       case Empty => this
     }
 
-    override def translate[F1[x] >: F[x], G[_]](fk: F1 ~> G): Entity[G] = Raw(body.translate(fk), length)
+    override def translate[F1[x] >: F[x], G[_]](fk: F1 ~> G): Entity[G] =
+      Raw(body.translate(fk), length)
   }
 
-  case object Empty extends Entity[Nothing] {
+  case object Empty extends Entity[Pure] {
 
-    override def body: EntityBody[Nothing] = EmptyBody
+    override def body: EntityBody[Pure] = Stream.empty
 
     override def length: Option[Long] = Some(0L)
 
@@ -56,11 +59,11 @@ object Entity {
 
   implicit def http4sMonoidForEntity[F[_]]: Monoid[Entity[F]] =
     new Monoid[Entity[F]] {
-      def combine(a1: Entity[F], a2: Entity[F]): Entity[F] =
-        a1 ++ a2
-      val empty: Entity[F] =
-        Entity.empty
+      def combine(a1: Entity[F], a2: Entity[F]): Entity[F] = a1 ++ a2
+      val empty: Entity[F] = Entity.empty
     }
 
-  val empty: Entity[Nothing] = Empty
+  // the type parameter helps with type inference - it should be able to go away
+  // once [[Media]] and its subtypes become covariant.
+  def empty[F[_]]: Entity[F] = Empty
 }

@@ -60,7 +60,7 @@ final case class ParseFailure(sanitized: String, details: String)
   def cause: Option[Throwable] = None
 
   def toHttpResponse[F[_]](httpVersion: HttpVersion): Response[F] =
-    Response[F](Status.BadRequest, httpVersion)
+    Response(Status.BadRequest, httpVersion)
       .withEntity(sanitized)
 }
 
