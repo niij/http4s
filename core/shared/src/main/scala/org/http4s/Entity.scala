@@ -19,23 +19,48 @@ package org.http4s
 import cats.Monoid
 import cats.syntax.all._
 import cats.~>
+import fs2.Pure
 
-final case class Entity[+F[_]](body: EntityBody[F], length: Option[Long] = None)
+sealed trait Entity[+F[_]] {
+  def body: EntityBody[F]
+  def length: Option[Long]
 
+  def ++[G[x] >: F[x]](that: Entity[G]): Entity[G]
+
+  def translate[F1[x] >: F[x], G[_]](fk: F1 ~> G): Entity[G]
+}
 object Entity {
-  implicit class InvariantOps[F[_]](private val self: Entity[F]) extends AnyVal {
-    import self._
+  def apply[F[_]](body: EntityBody[F], length: Option[Long] = None): Entity[F] = Raw(body, length)
 
-    def translate[G[_]](fk: F ~> G): Entity[G] = Entity(body.translate(fk), length)
+  final case class Raw[+F[_]](body: EntityBody[F], length: Option[Long]) extends Entity[F] {
+
+    override def ++[G[x] >: F[x]](that: Entity[G]): Entity[G] = that match {
+      case r: Raw[G] => Raw(body ++ r.body, (length, r.length).mapN(_ + _))
+      case Empty => this
+    }
+
+    override def translate[F1[x] >: F[x], G[_]](fk: F1 ~> G): Entity[G] = Raw(body.translate(fk), length)
+  }
+
+  case object Empty extends Entity[Nothing] {
+
+    override def body: EntityBody[Nothing] = EmptyBody
+
+    override def length: Option[Long] = Some(0L)
+
+    override def ++[G[x] >: Pure[x]](that: Entity[G]): Entity[G] = that
+
+    override def translate[F1[x] >: Pure[x], G[_]](fk: F1 ~> G): Entity[G] = Empty
+
   }
 
   implicit def http4sMonoidForEntity[F[_]]: Monoid[Entity[F]] =
     new Monoid[Entity[F]] {
       def combine(a1: Entity[F], a2: Entity[F]): Entity[F] =
-        Entity(a1.body ++ a2.body, (a1.length, a2.length).mapN(_ + _))
+        a1 ++ a2
       val empty: Entity[F] =
         Entity.empty
     }
 
-  val empty: Entity[Nothing] = Entity[Nothing](EmptyBody, Some(0L))
+  val empty: Entity[Nothing] = Empty
 }
